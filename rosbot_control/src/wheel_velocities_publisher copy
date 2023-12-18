@@ -1,0 +1,54 @@
+#include "std_msgs/msg/detail/float64_multi_array__struct.hpp"
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+
+class HolonomicController: public rclcpp::Node {
+public:
+    HolonomicController() {
+        // pub_ = nh_.advertise<std_msgs::Float32MultiArray>("wheel_velocities_publisher", 10);
+        pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/wheel_velocities_publisher", 10);
+
+        odom_sub_ = nh_.subscribe("odom", 10, &HolonomicController::odomCallback, this);
+        ros::Duration(1.0).sleep();
+    }
+
+    void run() {
+        // Your code logic goes here
+        ros::spin();  // Keep the program alive to process callbacks
+    }
+
+    void moveForward(){
+        pub_.publish(movefoward);
+    }
+
+private:
+    rclcpp::NodeHandle nh_;
+    rclcpp::Publisher pub_;
+    rclcpp::Subscriber odom_sub_;
+
+    // Message Type
+    std_msgs::Float32MultiArray wheel_velocities;
+    std_msgs::Float32MultiArray movefoward = {1, 1, 1, 1};
+    std::vector<int> movebackward = {-1, -1, -1, -1};
+    std::vector<int> moveright = {1, -1, 1, -1};
+    std::vector<int> moveleft = {-1, 1, -1, 1};
+    std::vector<int> turnright = {1, -1, -1, 1};
+    std::vector<int> turnleft = {-1, 1, 1, -1};
+    std::vector<int> turnleft = {0, 0, 0, 0};
+
+    void odomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg) {
+        double linear_velocity = odom_msg->twist.twist.linear.x;
+        double angular_velocity = odom_msg->twist.twist.angular.z;
+    }
+};
+
+int main(int argc, char** argv) {
+    rclcpp::init(argc, argv, "holonomic_controller");
+
+    HolonomicController controller;
+    controller.run();
+    controller.moveForward();
+
+    return 0;
+}
