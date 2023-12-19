@@ -11,7 +11,7 @@ public:
     HoloController() : Node("robot_controller") {
         
         // Publisher 
-        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_velocities_publisher", 10);
+        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_speed", 10);
 
         // Robot Dimensions
         l = 0.170/2;
@@ -116,6 +116,10 @@ public:
         }
         std::cout << std::endl;
         */
+
+        // Publish in the topic
+        vel_command.data = result;
+        publisher_->publish(vel_command);
     }
 
 private:
