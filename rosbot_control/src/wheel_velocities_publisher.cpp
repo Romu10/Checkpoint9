@@ -11,7 +11,7 @@ public:
     HoloController() : Node("robot_controller") {
         
         // Publisher 
-        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_speed", 10);
+        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_speed", 1);
 
         // Robot Dimensions
         l = 0.170/2;
@@ -58,7 +58,7 @@ public:
     void stopIt() {
         vel_command.data = stop; 
         publisher_->publish(vel_command);
-        RCLCPP_INFO(get_logger(), "Stoped");
+        RCLCPP_INFO(get_logger(), "Stop");
     }
 
     double dotProduct(const std::vector<double>& vec1, const std::vector<double>& vec2) {
@@ -158,45 +158,48 @@ int main(int argc, char** argv) {
     // Create a ROS 2 node
     auto controller = std::make_shared<HoloController>();
 
+    // Init message
+    std::cout << "Initialized wheel velocities publisher node" << std::endl;
+
     // Go Forward
     auto start_time = std::chrono::steady_clock::now();
     std::cout << "Move forward" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(0.5, 0.0, 0.0);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.1, 0.0, 0.0);
     }
 
     // Go backward
     start_time = std::chrono::steady_clock::now();
     std::cout << "Move backward" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(-0.5, 0.0, 0.0);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(-0.1, 0.0, 0.0);
     }
 
     // Go left
     start_time = std::chrono::steady_clock::now();
     std::cout << "Move left" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(0.0, 0.5, 0.0);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.0, -0.1, 0.0);
     }
 
     // Go right
     start_time = std::chrono::steady_clock::now();
     std::cout << "Move right" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(0.0, -0.5, 0.0);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.0, 0.1, 0.0);
     }
 
     // turn right
     start_time = std::chrono::steady_clock::now();
     std::cout << "Turn clockwise" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(0.0, 0.0, 0.5);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.0, 0.0, -0.5);
     }
 
     // turn left
     start_time = std::chrono::steady_clock::now();
     std::cout << "Turn counter-clockwise" << std::endl;
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
         controller->twist_2_wheels(0.0, 0.0, 0.5);
     }
 
