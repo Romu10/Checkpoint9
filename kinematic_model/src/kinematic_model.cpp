@@ -17,10 +17,10 @@ class Controller : public rclcpp::Node {
 public:
     Controller() : Node("robot_controller_transform") {
         // Publisher 
-        publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 1);
+        publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
 
         // Subscriber
-        subscriber_ = this->create_subscription<std_msgs::msg::Float64MultiArray>("/wheel_speed", 1,
+        subscriber_ = this->create_subscription<std_msgs::msg::Float64MultiArray>("/wheel_speed", 10,
                     std::bind(&Controller::wheel_vel_callback, this, std::placeholders::_1));
 
     }
@@ -33,11 +33,6 @@ private:
             u2 = msg->data[1];
             u3 = msg->data[2];
             u4 = msg->data[3];
-
-            u1 = u1/10;
-            u2 = u2/10;
-            u3 = u3/10;
-            u4 = u4/10;
 
             vx = (u1 + u2 + u3 + u4) / 4.0;
             wz = (u2 - u4) / 2.0;

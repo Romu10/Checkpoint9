@@ -18,7 +18,7 @@ class TrajectoryController : public rclcpp::Node {
 public:
     TrajectoryController() : Node("eight_trajectory_control") {
         // Publisher 
-        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_speed", 1);
+        publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("wheel_speed", 10);
 
         // Subscriber
         subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>("/rosbot_xl_base_controller/odom", 10,
@@ -51,11 +51,13 @@ public:
         }
 
         // Print the result
+        /*          
         std::cout << "Twist message: ";
         for (double value : result_) {
             std::cout << value << " ";
         }
         std::cout << std::endl;
+        */
     }
 
     std::tuple<double, double, double> getTwistMessage(){
@@ -63,14 +65,6 @@ public:
         double vx_ = result_[1];
         double vy_ = result_[2];
         return std::make_tuple(wz_, vx_, vy_);
-    }
-
-    void publishTwist(std::vector<double> publish_result_){
-        // Publish in the topic
-        vel_command.data = publish_result_;
-        publisher_->publish(vel_command);
-        RCLCPP_INFO(get_logger(), "Twist Message Published");
-
     }
 
     void twist_2_wheels(float wz, float vx, float vy) {
@@ -107,12 +101,13 @@ public:
         }
 
         // Print the result
+        /*
         std::cout << "Velocities for each wheel: ";
         for (double value : result) {
             std::cout << value << " ";
         }
         std::cout << std::endl;
-        
+        */
 
         // Publish in the topic
         vel_command.data = result;
@@ -138,6 +133,7 @@ private:
     void getEulerAngles(const geometry_msgs::msg::Quaternion& quaternion) {
         geometry_msgs::msg::Vector3 euler_angles;
         quaternionToEuler(quaternion, euler_angles);
+
         std::cout << "Roll: " << euler_angles.x << ", Pitch: " << euler_angles.y << ", Yaw: " << euler_angles.z << std::endl;
     }
 
@@ -194,6 +190,9 @@ private:
     double w;                               // hall of track width 
     double l;                               // hall of the wheel base distance 
 
+    // Current Yaw 
+    double current_yaw_;
+
 };
 
 int main(int argc, char** argv) {
@@ -209,20 +208,180 @@ int main(int argc, char** argv) {
     // Define Twist Vector 
     std::vector<double> twist_vector_ = {0.0, 0.0, 0.0};
 
-    // Waypoints  
-    std::vector<double> w1 = {0.0, 1.0, -1.0};
+    // Waypoints               
+    //                        phi - y -  x
+    std::vector<double> w1 = {0.0, 1.0, 1.0};
+    std::vector<double> w2 = {0.0, 1.0, -1.0};
+    std::vector<double> w3 = {0.0, 1.0, -1.0};
+    std::vector<double> w4 = {1.5708, -1.0, -1.0};
+    
+    std::vector<double> w5 = {-3.1415, 1.0, 1.0};
+    std::vector<double> w6 = {0.0, -1.0, -1.0};
+    std::vector<double> w7 = {0.0, -1.0, -1.0};
+    std::vector<double> w8 = {0.0, -1.0, 1.0};
 
     // Waypoint 1
+    std::cout << "Waypoint 1" << std::endl;
     controller->velocity_2_twist(w1[0], w1[1], w1[2]);
     std::tie(phi, vx, vy) = controller->getTwistMessage();
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    auto start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    // stop 1
+    
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
+
+    // Waypoint 2
+    std::cout << "Waypoint 2" << std::endl;
+    controller->velocity_2_twist(w2[0], w2[1], w2[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    
+    // stop 2
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
+
+    // Waypoint 3
+    std::cout << "Waypoint 3" << std::endl;
+    controller->velocity_2_twist(w3[0], w3[1], w3[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
     twist_vector_ = {phi, vx, vy};
-    std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    controller->twist_2_wheels(phi, vx, vy);
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+    
+    
+    // stop 3
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
 
+    // Waypoint 4
+    std::cout << "Waypoint 4" << std::endl;
+    controller->velocity_2_twist(w4[0], w4[1], w4[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 5) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
 
+    // stop 4
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
+    // Waypoint 5
+    std::cout << "Waypoint 5" << std::endl;
+    controller->velocity_2_twist(w5[0], w5[1], w5[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 5) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    // stop 5
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+
+    // adjust
+    // std::cout << "adjust" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
+        controller->twist_2_wheels(-0.20,0.0,0.0);
+    }
+    
+    // stop 5.5
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
+    // Waypoint 6
+    std::cout << "Waypoint 6" << std::endl;
+    controller->velocity_2_twist(w6[0], w6[1], w6[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    twist_vector_ = {phi, vx, vy};
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    // stop 6
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+    
+    // Waypoint 7
+    std::cout << "Waypoint 7" << std::endl;
+    controller->velocity_2_twist(w7[0], w7[1], w7[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    twist_vector_ = {phi, vx, vy};
+    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    // stop 6
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
+
+    // Waypoint 8
+    std::cout << "Waypoint 8" << std::endl;
+    controller->velocity_2_twist(w8[0], w8[1], w8[2]);
+    std::tie(phi, vx, vy) = controller->getTwistMessage();
+    twist_vector_ = {phi, vx, vy};
+    // std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
+        controller->twist_2_wheels(phi, vx, vy);
+    }
+
+    // stop 7
+    std::cout << "stop" << std::endl;
+    start_time = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
+        controller->twist_2_wheels(0.0,0.0,0.0);
+    }
 
     // Spin to process callbacks (if any) and keep the node alive
-    rclcpp::spin(controller);
+    // rclcpp::spin(controller);
 
     // Shutdown the ROS 2 node
     rclcpp::shutdown();
