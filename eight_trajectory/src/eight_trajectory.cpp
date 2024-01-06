@@ -95,24 +95,43 @@ public:
         // Calcular la orientación (yaw)
         double orientation = std::atan2(point2[2] - point1[2], point2[1] - point1[1]);
 
+        // Adjust when yaw get out reach
+        if (orientation < -2.30){
+            std::cout << "OLD Yaw: " << orientation << std::endl; 
+            orientation = -1.5708;
+        }
+        
+        else if (orientation > 2.30){
+            orientation = -1.885;
+        }
+        
+
         std::cout << "Distance: " << distance << " | Orientation: " << orientation << std::endl; 
 
         return std::make_tuple(distance, orientation);
 
     }
 
-    double turnCommand(double orientation){
+    double turnCommand(double orientation, bool turn, bool final){
 
         double turnVel;
 
-        // Calculate the vel command and publish only 20%
-        turnVel = (orientation - calculate_yaw) * 0.10;
+        if (turn){
+            turnVel = (orientation - calculate_yaw) * 0.30;
+        }
+        else if (final){
+            turnVel = ((orientation + 0.4927) - calculate_yaw) * 0.70;
+            std::cout << "Last Vel: " << turnVel << std::endl; 
+        }
+        else{
+            turnVel = (orientation - calculate_yaw) * 0.10;
+        }
 
         // Stabilize the command 
         if (std::abs(turnVel) < 0.05){
             turnVel = 0.0;
         }
-        
+
         std::cout << "Turn velocity Command: " << turnVel << std::endl;
         return turnVel;
     }
@@ -137,7 +156,6 @@ public:
         new_origen[1] = point[1] - origen[1];
         new_origen[2] = point[2] - origen[2];     
 
-        // Imprimir el vector utilizando el rango de C++11
         std::cout << "New Odom Target: " << std::endl;
         for (const auto& element : new_origen) {
             std::cout << element << " ";
@@ -165,10 +183,8 @@ private:
 
     long double calculateYaw(long double qx, long double qy, long double qz, long double qw) {
 
-        // Aplicar la fórmula para el ángulo de yaw
         long double yaw = std::atan2(2 * ((qw * qz) + (qx * qy)), 1 - 2 * ((qy * qy) + (qz * qz)));
-        
-        // Convertir el ángulo al rango [0, 180] en el lado izquierdo y [0, -180] en el lado derecho
+      
         if (yaw > M_PI) {
             yaw -= 2 * M_PI;
         } else if (yaw < -M_PI) {
@@ -240,10 +256,6 @@ private:
     double current_pos_x = 0.0;
     double current_pos_y = 0.0;
 
-    // Calculated dist and orit to current waypoint
-    // double distance = 0.0;
-    // double orientation = 0.0;
-
 };
 
 int main(int argc, char *argv[]) {
@@ -263,14 +275,13 @@ int main(int argc, char *argv[]) {
     executor.add_node(trajectory_controller);
 
     // Define Movement Variables
-    double vx = 0.0, vy = 0.0, vz = 0.0;
-
-    // Define distance and orientation to each waypoint
-    double distance, orientation = 0.0;
-    double target_orientation= 0.0;
+    double vx = 0.0, vz = 0.0;
 
     // Define Flag
-    bool flag;
+    bool flag = false;
+
+    // Time 
+    int time; 
 
     // Define position vector
     std::vector<double> pos_vector = {0.0, 0.0, 0.0};
@@ -285,46 +296,80 @@ int main(int argc, char *argv[]) {
     std::vector<double> w1 = {0.0, 1.0, -1.0};
     std::vector<double> w2 = {0.0, 1.0, 1.0};
     std::vector<double> w3 = {0.0, 1.0, 1.0};
-    std::vector<double> w4 = {1.5708, -1.0, -1.0};
-    std::vector<double> w5 = {-3.1415, 1.0, 1.0};
-    std::vector<double> w6 = {0.0, -1.0, -1.0};
-    std::vector<double> w7 = {0.0, -1.0, -1.0};
-    std::vector<double> w8 = {0.0, -1.0, 1.0};
+    std::vector<double> w4 = {1.5708, 1.0, -1.0};      
+    std::vector<double> w5 = {-3.1415, -1.0, -1.0};
+    std::vector<double> w6 = {0.0, -1.0, 1.0};
+    std::vector<double> w7 = {0.0, -1.0, 1.0};
+    std::vector<double> w8 = {0.0, -1.0, -1.0};
 
     std::vector<std::vector<double>> waypoints = {
         {0.0, 0.0, 0.0},
-        {0.0, 1.0, -1.0},
-        {0.0, 1.0, 1.0},
-        {0.0, 1.0, 1.0},
-        {1.5708, -1.0, -1.0},
-        {-3.1415, 1.0, 1.0},
-        {0.0, -1.0, -1.0},
-        {0.0, -1.0, -1.0},
-        {0.0, -1.0, 1.0}
+        {0.0, 1.0, -1.0},           // 1
+        {0.0, 1.0, 1.0},            // 2
+        {0.0, 1.0, 1.0},            // 3
+        {0.0, 1.0, -1.0},           // 4
+        {0.0, -1.0, -1.0},           // 5    
+        {0.0, -1.0, 1.0},          // 6
+        {0.0, -1.0, 1.0},          // 7
+        {0.0, -1.0, -1.0}            // 8
     };
+    
+    for (size_t i = 0; i < waypoints.size(); ++i) {
+        auto w0 = waypoints[0];
+        auto w1 = waypoints[(i + 1) % waypoints.size()];  // Use the next waypoint as w1
 
-    // Waypoint 1
-    std::cout << "Waypoint 1" << std::endl;
-    executor.spin_some(std::chrono::nanoseconds(100000000)); 
-
-    auto start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 9) {
-
-        if (flag == false){
-            std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0,w1);
-            target_orientation = orientation;
-            flag = true;
+        if (i < 1){
+            time = 8;
         }
-        else {
-            std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0,w1);
-            vz = trajectory_controller->turnCommand(target_orientation);
-            vx = trajectory_controller->forwardCommand(distance);
-            trajectory_controller->twist_2_wheels(vz, vx, 0.0);
+        else if (i > 3 && i < 5){
+            time = 13; 
         }
-        loop_rate.sleep();
-        executor.spin_some();
+        else if (i > 6){
+            time = 11;
+        }
+        else{
+            time = 10;
+        }
+
+        if (i > 7){
+            std::cout << "Trajectory END" << std::endl;
+            break;
+        }
+        
+        // Waypoint information
+        std::cout << "===========================" << std::endl;
+        std::cout << "Waypoint " << i + 1 << std::endl;
+        std::cout << "===========================" << std::endl;
+
+        auto start_time = std::chrono::steady_clock::now();
+        while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < time && rclcpp::ok()) {
+            double distance, orientation, target_orientation;
+
+            if (!flag) {
+                std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0, w1);
+                target_orientation = orientation;
+                flag = true;
+            } else {
+                std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0, w1);
+                if (i > 4 && i < 7){
+                    vz = trajectory_controller->turnCommand(target_orientation, true, false);
+                }
+                else if (i > 6){
+                    vz = trajectory_controller->turnCommand(target_orientation, false, true);
+                }
+                else {
+                    vz = trajectory_controller->turnCommand(target_orientation, false, false);
+                }
+                vx = trajectory_controller->forwardCommand(distance);
+                trajectory_controller->twist_2_wheels(vz, vx, 0.0);
+            }
+
+            loop_rate.sleep();
+            executor.spin_some();
+
+        }
+        flag = false;
     }
-
 
     // Shutdown the ROS 2 node
     rclcpp::shutdown();
