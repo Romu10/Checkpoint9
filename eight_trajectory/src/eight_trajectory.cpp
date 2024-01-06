@@ -13,6 +13,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/utils.h>
 #include <cmath>
+#include <vector>
 
 class TrajectoryController : public rclcpp::Node {
 public:
@@ -29,35 +30,6 @@ public:
         r = 0.100/2;
         w = 0.26969/2;
 
-    }
-
-    void velocity_2_twist(float phi, float dx, float dy) {
-        
-        R_ = {{1, 0, 0},
-               {0,  std::cos(phi), std::sin(phi)},
-               {0, -std::sin(phi), std::cos(phi)}};
-
-        v_ = {phi, dx, dy};
-
-        // Validate matrix and vector size for a correct dot product 
-        if (R_.size() != 3 || R_[0].size() != 3 || v_.size() != 3) {
-            std::cerr << "Error: Matrices must have the correct sizes for dot product calculation." << std::endl;
-        }
-
-        // Perform the dot product of the 3x3 matrix and the 3x1 matrix
-        result_ = {0.0, 0.0, 0.0};
-        for (size_t i = 0; i < result_.size(); ++i) {
-            result_[i] = dotProduct(R_[i], v_);
-        }
-
-        // Print the result
-        /*          
-        std::cout << "Twist message: ";
-        for (double value : result_) {
-            std::cout << value << " ";
-        }
-        std::cout << std::endl;
-        */
     }
 
     std::tuple<double, double, double> getTwistMessage(){
@@ -114,6 +86,67 @@ public:
         publisher_->publish(vel_command);
     }
 
+    // Función para calcular la distancia y la orientación entre dos puntos (x1, y1) y (x2, y2)
+    std::tuple<double, double> calculateDistanceAndOrientation(std::vector<double> point1, std::vector<double> point2) {
+
+        // Calcular la distancia
+        double distance = std::sqrt(std::pow(point2[1] - point1[1], 2) + std::pow(point2[2] - point1[2], 2));
+
+        // Calcular la orientación (yaw)
+        double orientation = std::atan2(point2[2] - point1[2], point2[1] - point1[1]);
+
+        std::cout << "Distance: " << distance << " | Orientation: " << orientation << std::endl; 
+
+        return std::make_tuple(distance, orientation);
+
+    }
+
+    double turnCommand(double orientation){
+
+        double turnVel;
+
+        // Calculate the vel command and publish only 20%
+        turnVel = (orientation - calculate_yaw) * 0.10;
+
+        // Stabilize the command 
+        if (std::abs(turnVel) < 0.05){
+            turnVel = 0.0;
+        }
+        
+        std::cout << "Turn velocity Command: " << turnVel << std::endl;
+        return turnVel;
+    }
+
+    double forwardCommand(double act_dist){
+        // Calculate the vel command and publish only 5%
+        double vel = (act_dist) * 0.01;
+        std::cout << "Forward velocity Command: " << vel << std::endl;
+        return vel;
+    }
+
+    std::vector<double> getRobotPos(){
+        std::vector<double> pos_vector = {0.0, 0.0, 0.0};
+        pos_vector[0] = calculate_yaw;
+        pos_vector[1] = current_pos_x;
+        pos_vector[2] = current_pos_y;
+        return pos_vector;
+    }
+
+    std::vector<double> calculateRelativeCordinates(const std::vector<double> point, std::vector<double> origen) {
+        std::vector<double> new_origen = {0.0, 0.0, 0.0};
+        new_origen[1] = point[1] - origen[1];
+        new_origen[2] = point[2] - origen[2];     
+
+        // Imprimir el vector utilizando el rango de C++11
+        std::cout << "New Odom Target: " << std::endl;
+        for (const auto& element : new_origen) {
+            std::cout << element << " ";
+        }
+        std::cout << std::endl;
+
+        return new_origen;
+    }
+
 private:
 
     double dotProduct(const std::vector<double>& vec1, const std::vector<double>& vec2) {
@@ -130,43 +163,50 @@ private:
         return result;
     }
 
-    void getEulerAngles(const geometry_msgs::msg::Quaternion& quaternion) {
-        geometry_msgs::msg::Vector3 euler_angles;
-        quaternionToEuler(quaternion, euler_angles);
+    long double calculateYaw(long double qx, long double qy, long double qz, long double qw) {
 
-        std::cout << "Roll: " << euler_angles.x << ", Pitch: " << euler_angles.y << ", Yaw: " << euler_angles.z << std::endl;
-    }
+        // Aplicar la fórmula para el ángulo de yaw
+        long double yaw = std::atan2(2 * ((qw * qz) + (qx * qy)), 1 - 2 * ((qy * qy) + (qz * qz)));
+        
+        // Convertir el ángulo al rango [0, 180] en el lado izquierdo y [0, -180] en el lado derecho
+        if (yaw > M_PI) {
+            yaw -= 2 * M_PI;
+        } else if (yaw < -M_PI) {
+            yaw += 2 * M_PI;
+        }
 
-    void quaternionToEuler(const geometry_msgs::msg::Quaternion& quaternion, geometry_msgs::msg::Vector3& euler_angles) {
-
-        // Normalizar el cuaternión
-        tf2::Quaternion tf_quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-        tf_quaternion.normalize();
-
-        // Obtener los ángulos de Euler
-        tf2::Matrix3x3(tf_quaternion).getRPY(euler_angles.x, euler_angles.y, euler_angles.z);
+        return yaw;
     }
 
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {   
-        quaternion.x = msg->pose.pose.orientation.x;
-        quaternion.y = msg->pose.pose.orientation.y;
-        quaternion.z = msg->pose.pose.orientation.z;
-        quaternion.w = msg->pose.pose.orientation.w;
 
-        if ((quaternion.z =! 0.0) && (quaternion.w != 0.0))
-        {
-            getEulerAngles(quaternion);
-            // RCLCPP_INFO(get_logger(), "\n q_x: %f\n q_y: %f \n q_z: %f \n q_w: %f", quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-        }
-        else {
-            RCLCPP_WARN(get_logger(), "No Data in the Quaternion Variable");
-        }
+        quaternion_x = msg->pose.pose.orientation.x;
+        quaternion_y = msg->pose.pose.orientation.y;
+        quaternion_z = msg->pose.pose.orientation.z;
+        quaternion_w = msg->pose.pose.orientation.w;
+        
+        quaternion.x = quaternion_x;
+        quaternion.y = quaternion_y;
+        quaternion.z = quaternion_z;
+        quaternion.w = quaternion_w;
 
+        current_pos_x = msg->pose.pose.position.x;
+        current_pos_y = msg->pose.pose.position.y;
+
+        // Calculate Yaw
+        calculate_yaw = calculateYaw(quaternion_x, quaternion_y, quaternion_z, quaternion_w);
+        calculated_current_yaw_degree = (calculate_yaw * (180.0 / M_PI));
+        std::cout << "Yaw: " << calculate_yaw << " rad" << std::endl;
+        
+
+        // Print current pos
+        // std::cout << "X position: " << current_pos_x << " m" << std::endl;
+        // std::cout << "Y position: " << current_pos_y << " m" << std::endl;
     }
 
     // Define Quarternion
     geometry_msgs::msg::Quaternion quaternion;
-    geometry_msgs::msg::Vector3 euler_angles;
+    long double quaternion_x, quaternion_y, quaternion_z, quaternion_w = 0.0;  
 
     // Publisher Definition
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr publisher_;
@@ -191,197 +231,100 @@ private:
     double l;                               // hall of the wheel base distance 
 
     // Current Yaw 
-    double current_yaw_;
+    long double current_yaw_rad = 0.0;
+    long double current_yaw_degree = 0.0;
+    long double calculate_yaw = 0.0;
+    long double  calculated_current_yaw_degree = 0.0;   
+
+    // Current Pose 
+    double current_pos_x = 0.0;
+    double current_pos_y = 0.0;
+
+    // Calculated dist and orit to current waypoint
+    // double distance = 0.0;
+    // double orientation = 0.0;
 
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char *argv[]) {
     // Initialize the ROS 2 node
     rclcpp::init(argc, argv);
 
     // Create a ROS 2 node
-    auto controller = std::make_shared<TrajectoryController>();
+    std::shared_ptr<TrajectoryController> trajectory_controller = std::make_shared<TrajectoryController>();
+    
+    // Indicate that nodes exists
+    RCLCPP_INFO(trajectory_controller->get_logger(), "Trajectory Controller UP...");
+
+    // Create executors
+    rclcpp::executors::MultiThreadedExecutor executor;
+
+    // Add the odometry subscriber node to the executor
+    executor.add_node(trajectory_controller);
 
     // Define Movement Variables
-    double vx = 0.0, vy = 0.0, phi = 0.0;
+    double vx = 0.0, vy = 0.0, vz = 0.0;
 
-    // Define Twist Vector 
-    std::vector<double> twist_vector_ = {0.0, 0.0, 0.0};
+    // Define distance and orientation to each waypoint
+    double distance, orientation = 0.0;
+    double target_orientation= 0.0;
+
+    // Define Flag
+    bool flag;
+
+    // Define position vector
+    std::vector<double> pos_vector = {0.0, 0.0, 0.0};
+    std::vector<double> pos_target = {0.0, 0.0, 0.0};
+
+    // Create frecuency Turn Controller
+    rclcpp::Rate loop_rate(5);
 
     // Waypoints               
-    //                        phi - y -  x
-    std::vector<double> w1 = {0.0, 1.0, 1.0};
-    std::vector<double> w2 = {0.0, 1.0, -1.0};
-    std::vector<double> w3 = {0.0, 1.0, -1.0};
+    //                        phi - x -  y
+    std::vector<double> w0 = {0.0, 0.0, 0.0};
+    std::vector<double> w1 = {0.0, 1.0, -1.0};
+    std::vector<double> w2 = {0.0, 1.0, 1.0};
+    std::vector<double> w3 = {0.0, 1.0, 1.0};
     std::vector<double> w4 = {1.5708, -1.0, -1.0};
-    
     std::vector<double> w5 = {-3.1415, 1.0, 1.0};
     std::vector<double> w6 = {0.0, -1.0, -1.0};
     std::vector<double> w7 = {0.0, -1.0, -1.0};
     std::vector<double> w8 = {0.0, -1.0, 1.0};
 
+    std::vector<std::vector<double>> waypoints = {
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, -1.0},
+        {0.0, 1.0, 1.0},
+        {0.0, 1.0, 1.0},
+        {1.5708, -1.0, -1.0},
+        {-3.1415, 1.0, 1.0},
+        {0.0, -1.0, -1.0},
+        {0.0, -1.0, -1.0},
+        {0.0, -1.0, 1.0}
+    };
+
     // Waypoint 1
     std::cout << "Waypoint 1" << std::endl;
-    controller->velocity_2_twist(w1[0], w1[1], w1[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
+    executor.spin_some(std::chrono::nanoseconds(100000000)); 
+
     auto start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 9) {
+
+        if (flag == false){
+            std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0,w1);
+            target_orientation = orientation;
+            flag = true;
+        }
+        else {
+            std::tie(distance, orientation) = trajectory_controller->calculateDistanceAndOrientation(w0,w1);
+            vz = trajectory_controller->turnCommand(target_orientation);
+            vx = trajectory_controller->forwardCommand(distance);
+            trajectory_controller->twist_2_wheels(vz, vx, 0.0);
+        }
+        loop_rate.sleep();
+        executor.spin_some();
     }
 
-    // stop 1
-    
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-
-    // Waypoint 2
-    std::cout << "Waypoint 2" << std::endl;
-    controller->velocity_2_twist(w2[0], w2[1], w2[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    
-    // stop 2
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-
-    // Waypoint 3
-    std::cout << "Waypoint 3" << std::endl;
-    controller->velocity_2_twist(w3[0], w3[1], w3[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    twist_vector_ = {phi, vx, vy};
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-    
-    
-    // stop 3
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-
-    // Waypoint 4
-    std::cout << "Waypoint 4" << std::endl;
-    controller->velocity_2_twist(w4[0], w4[1], w4[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 5) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    // stop 4
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-    // Waypoint 5
-    std::cout << "Waypoint 5" << std::endl;
-    controller->velocity_2_twist(w5[0], w5[1], w5[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 5) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    // stop 5
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-
-    // adjust
-    // std::cout << "adjust" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 1) {
-        controller->twist_2_wheels(-0.20,0.0,0.0);
-    }
-    
-    // stop 5.5
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 3) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-    // Waypoint 6
-    std::cout << "Waypoint 6" << std::endl;
-    controller->velocity_2_twist(w6[0], w6[1], w6[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    twist_vector_ = {phi, vx, vy};
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    // stop 6
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-    
-    // Waypoint 7
-    std::cout << "Waypoint 7" << std::endl;
-    controller->velocity_2_twist(w7[0], w7[1], w7[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    twist_vector_ = {phi, vx, vy};
-    //std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    // stop 6
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-
-    // Waypoint 8
-    std::cout << "Waypoint 8" << std::endl;
-    controller->velocity_2_twist(w8[0], w8[1], w8[2]);
-    std::tie(phi, vx, vy) = controller->getTwistMessage();
-    twist_vector_ = {phi, vx, vy};
-    // std::cout << "Pitch: " << phi << ", X: " << vx << ", Y: " << vy << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 4) {
-        controller->twist_2_wheels(phi, vx, vy);
-    }
-
-    // stop 7
-    std::cout << "stop" << std::endl;
-    start_time = std::chrono::steady_clock::now();
-    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() < 2) {
-        controller->twist_2_wheels(0.0,0.0,0.0);
-    }
-
-    // Spin to process callbacks (if any) and keep the node alive
-    // rclcpp::spin(controller);
 
     // Shutdown the ROS 2 node
     rclcpp::shutdown();
